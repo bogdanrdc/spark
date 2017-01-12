@@ -203,7 +203,10 @@ case class Stack(children: Seq[Expression]) extends Generator {
     ev.copy(code = code, isNull = "false")
   }
 }
-
+case class GeneratorOuter(child : Expression) extends UnaryExpression with Unevaluable {
+  override def dataType: DataType = child.dataType
+  override def nullable: Boolean = child.nullable
+}
 /**
  * A base class for [[Explode]] and [[PosExplode]].
  */

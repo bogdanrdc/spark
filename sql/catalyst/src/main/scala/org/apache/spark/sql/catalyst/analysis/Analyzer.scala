@@ -1609,6 +1609,9 @@ class Analyzer(
       case UnresolvedAlias(_: Generator, _) => false
       case Alias(_: Generator, _) => false
       case MultiAlias(_: Generator, _) => false
+      case UnresolvedAlias(GeneratorOuter(_: Generator), _) => false
+      case Alias(GeneratorOuter(_: Generator), _) => false
+      case MultiAlias(GeneratorOuter(_: Generator), _) => false
       case other => hasGenerator(other)
     }
 
@@ -1620,10 +1623,12 @@ class Analyzer(
     }
 
     /** Extracts a [[Generator]] expression and any names assigned by aliases to their output. */
-    private object AliasedGenerator {
-      def unapply(e: Expression): Option[(Generator, Seq[String])] = e match {
-        case Alias(g: Generator, name) if g.resolved => Some((g, name :: Nil))
-        case MultiAlias(g: Generator, names) if g.resolved => Some(g, names)
+    private object AliasedOuterGenerator {
+      def unapply(e: Expression): Option[(Generator, Seq[String], Boolean)] = e match {
+        case Alias(g: Generator, name) if g.resolved => Some(g, name :: Nil, false)
+        case Alias(GeneratorOuter(g: Generator), name) if g.resolved => Some(g, name :: Nil, true)
+        case MultiAlias(g: Generator, names) if g.resolved => Some(g, names, false)
+        case MultiAlias(GeneratorOuter(g: Generator), names) if g.resolved => Some(g, names, true)
         case _ => None
       }
     }
@@ -1644,7 +1649,7 @@ class Analyzer(
         var resolvedGenerator: Generate = null
 
         val newProjectList = projectList.flatMap {
-          case AliasedGenerator(generator, names) if generator.childrenResolved =>
+          case AliasedOuterGenerator(generator, names, outer) if generator.childrenResolved =>
             // It's a sanity check, this should not happen as the previous case will throw
             // exception earlier.
             assert(resolvedGenerator == null, "More than one generator found in SELECT.")
@@ -1653,7 +1658,7 @@ class Analyzer(
               Generate(
                 generator,
                 join = projectList.size > 1, // Only join if there are other expressions in SELECT.
-                outer = false,
+                outer = outer,
                 qualifier = None,
                 generatorOutput = ResolveGenerate.makeGeneratorOutput(generator, names),
                 child)

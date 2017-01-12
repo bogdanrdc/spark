@@ -2869,7 +2869,7 @@ object functions {
    * @since 1.3.0
    */
   def explode(e: Column): Column = withExpr { Explode(e.expr) }
-
+  def outer(e: Column): Column = withExpr { GeneratorOuter(e.expr) }
   /**
    * Creates a new row for each element with position in the given array or map column.
    *
