@@ -2869,7 +2869,7 @@ object functions {
    * @since 1.3.0
    */
   def explode(e: Column): Column = withExpr { Explode(e.expr) }
-  def outer_explode(e: Column): Column = withExpr { OuterExplode(e.expr) }
+  def outer_explode(e: Column): Column = withExpr { GeneratorOuter(Explode(e.expr)) }
 
 
   /**
@@ -2879,7 +2879,7 @@ object functions {
    * @since 2.1.0
    */
   def posexplode(e: Column): Column = withExpr { PosExplode(e.expr) }
-  def outer_posexplode(e: Column): Column = withExpr { OuterPosExplode(e.expr) }
+  def outer_posexplode(e: Column): Column = withExpr { GeneratorOuter(PosExplode(e.expr)) }
   /**
    * Extracts json object from a json string based on json path specified, and returns json string
    * of the extracted json object. It will return null if the input json string is invalid.

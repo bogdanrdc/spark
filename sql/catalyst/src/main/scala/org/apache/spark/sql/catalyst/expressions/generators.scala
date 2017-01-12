@@ -49,7 +49,6 @@ trait Generator extends Expression {
 
   override def nullable: Boolean = false
 
-  def outer: Boolean = false
   /**
    * The output element schema.
    */
@@ -204,7 +203,17 @@ case class Stack(children: Seq[Expression]) extends Generator {
     ev.copy(code = code, isNull = "false")
   }
 }
+case class GeneratorOuter(child: Generator) extends UnaryExpression
+    with Generator {
 
+  final override def eval(input: InternalRow = null): TraversableOnce[InternalRow] =
+    throw new UnsupportedOperationException(s"Cannot evaluate expression: $this")
+
+  final override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode =
+    throw new UnsupportedOperationException(s"Cannot evaluate expression: $this")
+
+  override def elementSchema: StructType = child.elementSchema
+}
 /**
  * A base class for [[Explode]] and [[PosExplode]].
  */
@@ -301,10 +310,6 @@ abstract class ExplodeBase extends UnaryExpression with CollectionGenerator with
 case class Explode(child: Expression) extends ExplodeBase {
   override val position: Boolean = false
 }
-case class OuterExplode(child: Expression) extends ExplodeBase {
-  override val position: Boolean = false
-  override val outer: Boolean = true
-}
 
 /**
  * Given an input array produces a sequence of rows for each position and value in the array.
@@ -328,10 +333,6 @@ case class OuterExplode(child: Expression) extends ExplodeBase {
 case class PosExplode(child: Expression) extends ExplodeBase {
   override val position = true
 }
-case class OuterPosExplode(child: Expression) extends ExplodeBase {
-  override val position: Boolean = true
-  override val outer: Boolean = true
-}
 
 /**
  * Explodes an array of structs into a table.
@@ -344,7 +345,7 @@ case class OuterPosExplode(child: Expression) extends ExplodeBase {
        1  a
        2  b
   """)
-abstract class InlineBase extends UnaryExpression with CollectionGenerator {
+case class Inline(child: Expression) extends UnaryExpression with CollectionGenerator {
   override val inline: Boolean = true
   override val position: Boolean = false
 
@@ -378,7 +379,5 @@ abstract class InlineBase extends UnaryExpression with CollectionGenerator {
     child.genCode(ctx)
   }
 }
-case class Inline(child: Expression) extends InlineBase
-case class OuterInline(child: Expression) extends InlineBase {
-  override val outer: Boolean = true
-}
+
+class OuterInline(child: Expression) extends GeneratorOuter(Inline(child))
