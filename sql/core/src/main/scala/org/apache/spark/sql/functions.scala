@@ -2869,7 +2869,9 @@ object functions {
    * @since 1.3.0
    */
   def explode(e: Column): Column = withExpr { Explode(e.expr) }
-  def outer(e: Column): Column = withExpr { GeneratorOuter(e.expr) }
+  def outer_explode(e: Column): Column = withExpr { OuterExplode(e.expr) }
+
+
   /**
    * Creates a new row for each element with position in the given array or map column.
    *
@@ -2877,7 +2879,7 @@ object functions {
    * @since 2.1.0
    */
   def posexplode(e: Column): Column = withExpr { PosExplode(e.expr) }
-
+  def outer_posexplode(e: Column): Column = withExpr { OuterPosExplode(e.expr) }
   /**
    * Extracts json object from a json string based on json path specified, and returns json string
    * of the extracted json object. It will return null if the input json string is invalid.

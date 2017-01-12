@@ -166,6 +166,7 @@ object FunctionRegistry {
     expression[Greatest]("greatest"),
     expression[If]("if"),
     expression[Inline]("inline"),
+    expression[OuterInline]("outer_inline"),
     expression[IsNaN]("isnan"),
     expression[IfNull]("ifnull"),
     expression[IsNull]("isnull"),

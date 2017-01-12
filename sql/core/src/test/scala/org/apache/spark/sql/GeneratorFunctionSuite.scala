@@ -86,6 +86,12 @@ class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
       df.select(explode('intList)),
       Row(1) :: Row(2) :: Row(3) :: Nil)
   }
+  test("single explode outer") {
+    val df = Seq((1, Seq(1, 2, 3)), (2, Seq())).toDF("a", "intList")
+    checkAnswer(
+      df.select(explode('intList)),
+      Row(1) :: Row(2) :: Row(3) :: Nil)
+  }
 
   test("single posexplode") {
     val df = Seq((1, Seq(1, 2, 3))).toDF("a", "intList")

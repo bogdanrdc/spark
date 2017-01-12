@@ -49,6 +49,7 @@ trait Generator extends Expression {
 
   override def nullable: Boolean = false
 
+  def outer: Boolean = false
   /**
    * The output element schema.
    */
@@ -203,10 +204,7 @@ case class Stack(children: Seq[Expression]) extends Generator {
     ev.copy(code = code, isNull = "false")
   }
 }
-case class GeneratorOuter(child : Expression) extends UnaryExpression with Unevaluable {
-  override def dataType: DataType = child.dataType
-  override def nullable: Boolean = child.nullable
-}
+
 /**
  * A base class for [[Explode]] and [[PosExplode]].
  */
@@ -303,6 +301,10 @@ abstract class ExplodeBase extends UnaryExpression with CollectionGenerator with
 case class Explode(child: Expression) extends ExplodeBase {
   override val position: Boolean = false
 }
+case class OuterExplode(child: Expression) extends ExplodeBase {
+  override val position: Boolean = false
+  override val outer: Boolean = true
+}
 
 /**
  * Given an input array produces a sequence of rows for each position and value in the array.
@@ -326,6 +328,10 @@ case class Explode(child: Expression) extends ExplodeBase {
 case class PosExplode(child: Expression) extends ExplodeBase {
   override val position = true
 }
+case class OuterPosExplode(child: Expression) extends ExplodeBase {
+  override val position: Boolean = true
+  override val outer: Boolean = true
+}
 
 /**
  * Explodes an array of structs into a table.
@@ -338,7 +344,7 @@ case class PosExplode(child: Expression) extends ExplodeBase {
        1  a
        2  b
   """)
-case class Inline(child: Expression) extends UnaryExpression with CollectionGenerator {
+abstract class InlineBase extends UnaryExpression with CollectionGenerator {
   override val inline: Boolean = true
   override val position: Boolean = false
 
@@ -371,4 +377,8 @@ case class Inline(child: Expression) extends UnaryExpression with CollectionGene
   override protected def doGenCode(ctx: CodegenContext, ev: ExprCode): ExprCode = {
     child.genCode(ctx)
   }
+}
+case class Inline(child: Expression) extends InlineBase
+case class OuterInline(child: Expression) extends InlineBase {
+  override val outer: Boolean = true
 }
