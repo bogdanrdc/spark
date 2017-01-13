@@ -24,6 +24,7 @@ import org.apache.spark.sql.functions._
 import org.apache.spark.sql.test.SharedSQLContext
 import org.apache.spark.sql.types.{IntegerType, StructType}
 
+
 class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
   import testImplicits._
 
@@ -86,7 +87,7 @@ class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
       df.select(explode('intList)),
       Row(1) :: Row(2) :: Row(3) :: Nil)
   }
-  test("single explode outer") {
+  test("single outer_explode") {
     val df = Seq((1, Seq(1, 2, 3)), (2, Seq())).toDF("a", "intList")
     checkAnswer(
       df.select(outer_explode('intList)),
@@ -98,6 +99,12 @@ class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
     checkAnswer(
       df.select(posexplode('intList)),
       Row(0, 1) :: Row(1, 2) :: Row(2, 3) :: Nil)
+  }
+  test("single outer_posexplode") {
+    val df = Seq((1, Seq(1, 2, 3)), (2, Seq())).toDF("a", "intList")
+    checkAnswer(
+      df.select(outer_posexplode('intList)),
+      Row(0, 1) :: Row(1, 2) :: Row(2, 3) :: Row(0, 0) :: Nil)
   }
 
   test("explode and other columns") {
@@ -115,6 +122,25 @@ class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
       Row(1, Seq(1, 2, 3), 2) ::
       Row(1, Seq(1, 2, 3), 3) :: Nil)
   }
+  test("outer_explode and other columns") {
+    val df = Seq((1, Seq(1, 2, 3)), (2, Seq())).toDF("a", "intList")
+
+    checkAnswer(
+      df.select($"a", outer_explode('intList)),
+      Row(1, 1) ::
+        Row(1, 2) ::
+        Row(1, 3) ::
+        Row(2, 0) ::
+        Nil)
+
+    checkAnswer(
+      df.select($"*", outer_explode('intList)),
+      Row(1, Seq(1, 2, 3), 1) ::
+        Row(1, Seq(1, 2, 3), 2) ::
+        Row(1, Seq(1, 2, 3), 3) ::
+        Row(2, Seq(), 0) ::
+        Nil)
+  }
 
   test("aliased explode") {
     val df = Seq((1, Seq(1, 2, 3))).toDF("a", "intList")
@@ -128,12 +154,32 @@ class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
       Row(6) :: Nil)
   }
 
+  test("aliased outer_explode") {
+    val df = Seq((1, Seq(1, 2, 3)), (2, Seq())).toDF("a", "intList")
+
+    checkAnswer(
+      df.select(outer_explode('intList).as('int)).select('int),
+      Row(1) :: Row(2) :: Row(3) :: Row(0) :: Nil)
+
+    checkAnswer(
+      df.select(explode('intList).as('int)).select(sum('int)),
+      Row(6) :: Nil)
+  }
+
   test("explode on map") {
     val df = Seq((1, Map("a" -> "b"))).toDF("a", "map")
 
     checkAnswer(
       df.select(explode('map)),
       Row("a", "b"))
+  }
+  test("outer_explode on map") {
+    val df = Seq((1, Map("a" -> "b")), (2, Map[String, String]()),
+      (3, Map("c" -> "d"))).toDF("a", "map")
+
+    checkAnswer(
+      df.select(outer_explode('map)),
+      Row("a", "b") :: Row(null, null) :: Row("c", "d") :: Nil)
   }
 
   test("explode on map with aliases") {
@@ -142,6 +188,14 @@ class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
     checkAnswer(
       df.select(explode('map).as("key1" :: "value1" :: Nil)).select("key1", "value1"),
       Row("a", "b"))
+  }
+
+  test("outer_explode on map with aliases") {
+    val df = Seq((3, None), (1, Some(Map("a" -> "b")))).toDF("a", "map")
+
+    checkAnswer(
+      df.select(outer_explode('map).as("key1" :: "value1" :: Nil)).select("key1", "value1"),
+      Row("a", "b") :: Row(null, null) :: Nil)
   }
 
   test("self join explode") {

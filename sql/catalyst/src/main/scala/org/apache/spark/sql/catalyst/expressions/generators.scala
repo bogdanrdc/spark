@@ -243,11 +243,11 @@ abstract class ExplodeBase extends UnaryExpression with CollectionGenerator with
       if (position) {
         new StructType()
           .add("pos", IntegerType, nullable = false)
-          .add("key", kt, nullable = false)
+          .add("key", kt, nullable = true)
           .add("value", vt, valueContainsNull)
       } else {
         new StructType()
-          .add("key", kt, nullable = false)
+          .add("key", kt, nullable = true)
           .add("value", vt, valueContainsNull)
       }
   }
