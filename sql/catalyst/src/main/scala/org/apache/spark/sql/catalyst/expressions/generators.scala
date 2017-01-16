@@ -203,6 +203,7 @@ case class Stack(children: Seq[Expression]) extends Generator {
     ev.copy(code = code, isNull = "false")
   }
 }
+
 case class GeneratorOuter(child: Generator) extends UnaryExpression
     with Generator {
 
@@ -310,7 +311,7 @@ abstract class ExplodeBase extends UnaryExpression with CollectionGenerator with
 case class Explode(child: Expression) extends ExplodeBase {
   override val position: Boolean = false
 }
-
+class OuterExplode(child: Expression) extends GeneratorOuter(Explode(child))
 /**
  * Given an input array produces a sequence of rows for each position and value in the array.
  *
@@ -333,7 +334,7 @@ case class Explode(child: Expression) extends ExplodeBase {
 case class PosExplode(child: Expression) extends ExplodeBase {
   override val position = true
 }
-
+class OuterPosExplode(child: Expression) extends GeneratorOuter(PosExplode(child))
 /**
  * Explodes an array of structs into a table.
  */

@@ -161,12 +161,11 @@ case class GenerateExec(
     // Generate looping variables.
     val index = ctx.freshName("index")
     val numElements = ctx.freshName("numElements")
-    val generateOuter = ctx.freshName("generateOuter")
 
     // In case of outer=true we need to make sure the loop is executed at-least once when the
-    // array/map contains no input. We do this by setting the looping index to -1 if there is no
-    // input, evaluation of the array is prevented by a check in the accessor code.
-
+    // array/map contains no input.
+    // generateOuter is an int. it is set to 1 iff outer is true and the input is empty or null.
+    val generateOuter = ctx.freshName("generateOuter")
     val isOuter = if (outer) {
       "true"
     } else {
@@ -189,14 +188,12 @@ case class GenerateExec(
         val row = codeGenAccessor(ctx, data.value, "col", index, st, nullable, checks)
         val fieldChecks = checks ++ optionalCode(nullable, row.isNull)
         val columns = st.fields.toSeq.zipWithIndex.map { case (f, i) =>
-          codeGenAccessor(ctx, row.value, f.name, i.toString,
-            f.dataType, f.nullable, fieldChecks)
+          codeGenAccessor(ctx, row.value, f.name, i.toString, f.dataType, f.nullable, fieldChecks)
         }
         ("", row.code, columns)
 
       case ArrayType(dataType, nullable) =>
-        ("", "", Seq(codeGenAccessor(ctx, data.value, "col", index,
-          dataType, nullable, checks)))
+        ("", "", Seq(codeGenAccessor(ctx, data.value, "col", index, dataType, nullable, checks)))
 
       case MapType(keyType, valueType, valueContainsNull) =>
         // Materialize the key and the value arrays before we enter the loop.
@@ -208,10 +205,8 @@ case class GenerateExec(
              |ArrayData $valueArray = ${data.isNull} ? null : ${data.value}.valueArray();
            """.stripMargin
         val values = Seq(
-          codeGenAccessor(ctx, keyArray, "key", index,
-            keyType, nullable = false, checks),
-          codeGenAccessor(ctx, valueArray, "value", index,
-            valueType, valueContainsNull, checks))
+          codeGenAccessor(ctx, keyArray, "key", index, keyType, nullable = false, checks),
+          codeGenAccessor(ctx, valueArray, "value", index, valueType, valueContainsNull, checks))
         (initArrayData, "", values)
     }
 

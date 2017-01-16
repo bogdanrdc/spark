@@ -266,6 +266,18 @@ class GeneratorFunctionSuite extends QueryTest with SharedSQLContext {
       df.selectExpr("array(struct(a), named_struct('a', b))").selectExpr("inline(*)"),
       Row(1) :: Row(2) :: Nil)
   }
+  test("outer_inline") {
+    val df = Seq((1, "2"), (3, "4"), (5, "6")).toDF("col1", "col2")
+    val df2 = df.select(when('col1 === 1, null).otherwise(array(struct('col1, 'col2))).as("col1"))
+    checkAnswer(
+      df2.selectExpr("inline(col1)"),
+      Row(3, "4") :: Row(5, "6") :: Nil
+    )
+    checkAnswer(
+      df2.selectExpr("outer_inline(col1)"),
+      Row(0, null) :: Row(3, "4") :: Row(5, "6") :: Nil
+    )
+  }
 
   test("SPARK-14986: Outer lateral view with empty generate expression") {
     checkAnswer(
