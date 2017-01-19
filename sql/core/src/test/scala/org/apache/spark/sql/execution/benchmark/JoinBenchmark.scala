@@ -226,4 +226,16 @@ class JoinBenchmark extends BenchmarkBase {
      */
   }
 
+  test("broadcast nested loop join") {
+    sparkSession.conf.set("spark.sql.crossJoin.enabled", "true")
+    sparkSession.conf.set("spark.sql.autoBroadcastJoinThreshold", "10000000")
+    val N = 10000
+    runBenchmark("broadcast join", N * N) {
+      val df1 = sparkSession.range(N).selectExpr(s"id as a1")
+      val df2 = sparkSession.range(N / 5).selectExpr(s"id as b1")
+      df1.join(df2, col("a1") < col("b1")).explain(true)
+      println(df1.join(df2, col("a1") < col("b1")).count())
+    }
+  }
+
 }

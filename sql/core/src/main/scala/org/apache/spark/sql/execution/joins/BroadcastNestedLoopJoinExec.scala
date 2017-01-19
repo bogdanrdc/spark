@@ -22,9 +22,10 @@ import org.apache.spark.rdd.RDD
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.InternalRow
 import org.apache.spark.sql.catalyst.expressions._
+import org.apache.spark.sql.catalyst.expressions.codegen.{CodegenContext, CodegenFallback, ExprCode}
 import org.apache.spark.sql.catalyst.plans._
 import org.apache.spark.sql.catalyst.plans.physical._
-import org.apache.spark.sql.execution.{BinaryExecNode, SparkPlan}
+import org.apache.spark.sql.execution.{BinaryExecNode, CodegenSupport, SparkPlan}
 import org.apache.spark.sql.execution.metric.SQLMetrics
 import org.apache.spark.sql.internal.SQLConf
 import org.apache.spark.util.collection.{BitSet, CompactBuffer}
@@ -34,7 +35,10 @@ case class BroadcastNestedLoopJoinExec(
     right: SparkPlan,
     buildSide: BuildSide,
     joinType: JoinType,
-    condition: Option[Expression]) extends BinaryExecNode {
+    condition: Option[Expression]) extends BinaryExecNode with CodegenSupport {
+
+  /** only inner join supported for now */
+  override val supportCodegen: Boolean = joinType.isInstanceOf[InnerLike]
 
   override lazy val metrics = Map(
     "numOutputRows" -> SQLMetrics.createMetric(sparkContext, "number of output rows"))
@@ -374,5 +378,54 @@ case class BroadcastNestedLoopJoinExec(
         resultProj(r)
       }
     }
+  }
+  override def inputRDDs() : Seq[RDD[InternalRow]] = {
+    streamed.asInstanceOf[CodegenSupport].inputRDDs()
+  }
+  override def doConsume(ctx: CodegenContext, input: Seq[ExprCode], row: ExprCode): String = {
+    val buildSideRow = ctx.freshName("buildSideRow")
+    ctx.copyResult = true
+    val broadcastRelation = broadcast.doExecuteBroadcast[Array[InternalRow]]()
+    val broadcastTerm = ctx.addReferenceObj("broadcast", broadcastRelation.value,
+      broadcastRelation.value.getClass.getCanonicalName)
+    ctx.INPUT_ROW = buildSideRow
+    ctx.currentVars = null
+    val buildVars = broadcast.output.zipWithIndex.map { case (e, i) =>
+      BoundReference(i, e.dataType, e.nullable).genCode(ctx)
+    }
+    ctx.INPUT_ROW = null
+
+    val outputs = buildSide match {
+      case BuildLeft => buildVars ++ input
+      case BuildRight => input ++ buildVars
+    }
+
+    val joinCondition = if (condition.isDefined) {
+      ctx.currentVars = input ++ buildVars
+      val eval = evaluateRequiredVariables(broadcast.output, buildVars, condition.get.references)
+      val be = BindReferences.bindReference(condition.get, streamed.output ++ broadcast.output)
+        .genCode(ctx)
+
+      s"""
+         |/* eval */
+         |$eval
+         |/* be.code */
+         |${be.code}
+         |if (!(${be.value})) continue;
+       """.stripMargin
+    } else {
+      ""
+    }
+
+    s"""
+       |for(int i = 0; i < ${broadcastTerm}.length; ++i) {
+       |  InternalRow $buildSideRow = ${broadcastTerm}[i];
+       |  $joinCondition
+       |  ${consume(ctx, outputs)}
+       |}
+     """.stripMargin
+  }
+  override def doProduce(ctx: CodegenContext): String = {
+    streamed.asInstanceOf[CodegenSupport].produce(ctx, this)
   }
 }
