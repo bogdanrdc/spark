@@ -382,28 +382,12 @@ case class BroadcastNestedLoopJoinExec(
   override def inputRDDs() : Seq[RDD[InternalRow]] = {
     streamed.asInstanceOf[CodegenSupport].inputRDDs()
   }
-  override def doConsume(ctx: CodegenContext, input: Seq[ExprCode], row: ExprCode): String = {
-    val buildSideRow = ctx.freshName("buildSideRow")
-    ctx.copyResult = true
-    val broadcastRelation = broadcast.doExecuteBroadcast[Array[InternalRow]]()
-    val broadcastTerm = ctx.addReferenceObj("broadcast", broadcastRelation.value,
-      broadcastRelation.value.getClass.getCanonicalName)
-    ctx.INPUT_ROW = buildSideRow
-    ctx.currentVars = null
-    val buildVars = broadcast.output.zipWithIndex.map { case (e, i) =>
-      BoundReference(i, e.dataType, e.nullable).genCode(ctx)
-    }
-    ctx.INPUT_ROW = null
-
-    val outputs = buildSide match {
-      case BuildLeft => buildVars ++ input
-      case BuildRight => input ++ buildVars
-    }
-
-    val joinCondition = if (condition.isDefined) {
-      ctx.currentVars = input ++ buildVars
-      val eval = evaluateRequiredVariables(broadcast.output, buildVars, condition.get.references)
-      val be = BindReferences.bindReference(condition.get, streamed.output ++ broadcast.output)
+  def getJoinConditionCode(ctx: CodegenContext, vars: Seq[ExprCode],
+      outputs: Seq[Attribute]): String = {
+    if (condition.isDefined) {
+      ctx.currentVars = vars
+      val eval = evaluateRequiredVariables(outputs, vars, condition.get.references)
+      val be = BindReferences.bindReference(condition.get, outputs)
         .genCode(ctx)
 
       s"""
@@ -416,12 +400,34 @@ case class BroadcastNestedLoopJoinExec(
     } else {
       ""
     }
+  }
+  def genBroadcastVars(ctx: CodegenContext, broadcastRow: String): Seq[ExprCode] = {
+    ctx.INPUT_ROW = broadcastRow
+    ctx.currentVars = null
+    broadcast.output.zipWithIndex.map { case (e, i) =>
+      BoundReference(i, e.dataType, e.nullable).genCode(ctx)
+    }
+  }
+  override def doConsume(ctx: CodegenContext, input: Seq[ExprCode], row: ExprCode): String = {
+    val broadcastRow = ctx.freshName("broadcastRow")
+    val broadcastRelation = broadcast.doExecuteBroadcast[Array[InternalRow]]()
+    val broadcastRelationTerm = ctx.addReferenceObj("broadcast", broadcastRelation.value,
+      broadcastRelation.value.getClass.getCanonicalName)
+    val broadcastVars = genBroadcastVars(ctx, broadcastRow)
 
+    val (vars, outputs) = buildSide match {
+      case BuildLeft => (broadcastVars ++ input, broadcast.output ++ streamed.output)
+      case BuildRight => (input ++ broadcastVars, streamed.output ++ broadcast.output)
+    }
+
+    val joinCondition = getJoinConditionCode(ctx, vars, outputs)
+
+    ctx.copyResult = true
     s"""
-       |for(int i = 0; i < ${broadcastTerm}.length; ++i) {
-       |  InternalRow $buildSideRow = ${broadcastTerm}[i];
+       |for(int i = 0; i < ${broadcastRelationTerm}.length; ++i) {
+       |  InternalRow $broadcastRow = ${broadcastRelationTerm}[i];
        |  $joinCondition
-       |  ${consume(ctx, outputs)}
+       |  ${consume(ctx, vars)}
        |}
      """.stripMargin
   }
